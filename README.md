@@ -1,5 +1,5 @@
 # Qian Master Thesis
 
-- Scripts
+- This is a repository with data analysis.
 
 
