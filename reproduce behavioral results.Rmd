@@ -1,0 +1,341 @@
+---
+title: "reproduce behavioral results"
+author: "Qian"
+date: "2025-03-18"
+output: html_document
+---
+
+# Load the tidyverse package below
+```{r T101, warning=FALSE, message=FALSE}
+# Load the tidyverse package below
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+```
+
+## Read  initial data files
+```{r T101, warning=FALSE, message=FALSE}
+
+df <- read_csv("data/behavior/all_data_df.csv")
+```
+
+```{r T101, warning=FALSE, message=FALSE}
+#这个是正确 答案，但是还需要做一些调整
+# 加载必要的包
+library(lme4)
+library(ggplot2)
+library(dplyr)
+
+# 读取数据
+data <- read.csv("data/behavior/all_data_df.csv")  # 替换为你的数据文件路径
+
+# 转换因子变量
+data$participant_condition <- factor(data$participant_condition)
+data$other_condition <- factor(data$other_condition)
+data$question_content <- factor(data$question_content)
+
+# 运行 GLMM 分析
+model <- lmer(measure ~ participant_condition * other_condition + (1 | user_id), data = data)
+
+# 输出模型摘要
+summary(model)
+
+# 创建可视化
+ggplot(data, aes(x = participant_condition, y = measure, color = other_condition)) +
+  stat_summary(fun = mean, geom = "point", position = position_dodge(0.3), size = 3) +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2, position = position_dodge(0.3)) +
+  geom_jitter(width = 0.2, alpha = 0.5) +
+  facet_wrap(~ question_content, scales = "free_y") +
+  scale_color_manual(values = c("red", "blue")) +
+  labs(x = "Participant Condition", y = "Participant Rating", title = "GLMM Analysis Results") +
+  theme_minimal()
+
+
+```
+```{r T101, warning=FALSE, message=FALSE}
+# 这个是草稿 尝试过程
+# 读取数据
+data <- read.csv("data/behavior/all_data_df.csv")  # 替换为你的数据文件路径
+
+# 转换因子变量
+data$participant_condition <- factor(data$participant_condition)
+data$other_condition <- factor(data$other_condition)
+data$question_content <- factor(data$question_content)
+
+# 运行 GLMM 分析
+model <- lmer(measure ~ participant_condition * other_condition + (1 | user_id), data = data)
+
+# 输出模型摘要
+summary(model)
+
+# 创建可视化
+ggplot(data, aes(x = participant_condition, y = measure, color = other_condition)) +
+  stat_summary(fun = mean, geom = "point", position = position_dodge(0.3), size = 3) +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.3, position = position_dodge(0.3), size = 1) +  # 增大误差条宽度
+  geom_jitter(width = 0.2, alpha = 0.3) +  # 增加点的透明度
+  facet_wrap(~ question_content, scales = "free_y") +
+  scale_color_manual(values = c("red", "blue")) +
+  labs(x = "Participant Condition", y = "Participant Rating", title = "GLMM Analysis Results") +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(size = 12, face = "bold"),  # 调整分面标签的字体大小和粗细
+    axis.title = element_text(size = 14, face = "bold"),  # 调整坐标轴标题的字体大小和粗细
+    axis.text = element_text(size = 12),  # 调整坐标轴文本的字体大小
+    legend.title = element_text(size = 12, face = "bold"),  # 调整图例标题的字体大小和粗细
+    legend.text = element_text(size = 12)  # 调整图例文本的字体大小
+  )
+
+
+```
+
+
+```{r T101, warning=FALSE, message=FALSE}
+# CHAT修改版本图
+# 加载必要的 R 包
+library(lme4)
+library(ggplot2)
+library(dplyr)
+library(ggpubr)  # 额外优化可视化
+library(Hmisc)   # 计算置信区间
+
+# 读取数据
+data <- read.csv("data/behavior/all_data_df.csv")  # 替换为你的数据文件路径
+
+# 转换因子变量
+data$participant_condition <- factor(data$participant_condition)
+data$other_condition <- factor(data$other_condition)
+data$question_content <- factor(data$question_content)
+
+# 运行 GLMM（广义线性混合模型）
+model <- lmer(measure ~ participant_condition * other_condition + (1 | user_id), data = data)
+
+# 输出模型摘要
+summary(model)
+
+# 计算均值和 95% 置信区间
+summary_df <- data %>%
+  group_by(participant_condition, other_condition, question_content) %>%
+  summarise(mean_rating = mean(measure),
+            ci_lower = mean_cl_boot(measure)$ymin,
+            ci_upper = mean_cl_boot(measure)$ymax,
+            .groups = 'drop')
+
+# 设定颜色映射
+colors <- c("increase_smile" = "red", "decrease_smile" = "blue")
+
+# 绘制改进后的交互作用图
+ggplot(data, aes(x = participant_condition, y = measure, color = other_condition)) +
+  # 添加散点，设置透明度避免遮挡
+  geom_jitter(width = 0.2, alpha = 0.4) +
+  
+  # 添加均值点，增加大小和清晰度
+  geom_point(data = summary_df, aes(y = mean_rating), 
+             position = position_dodge(width = 0.5), size = 4, shape = 16) +
+  
+  # 添加误差棒（95% 置信区间），加粗以提升可见性
+  geom_errorbar(data = summary_df, aes(ymin = ci_lower, ymax = ci_upper),
+                position = position_dodge(width = 0.5), width = 0.2, linewidth = 1.2) +
+  
+  # 分面绘图，按问题类型（question_content）分组
+  facet_wrap(~ question_content, scales = "free_y") +
+  
+  # 设定颜色，使两组更明显
+  scale_color_manual(values = colors) +
+  
+  # 调整图表主题，使其更清晰
+  theme_minimal(base_size = 14) +
+  
+  # 调整标签
+  labs(title = "GLMM Interaction Plot (Improved)", 
+       x = "Participant Condition", 
+       y = "Participant Rating", 
+       color = "Other Condition")
+
+
+```
+
+
+```{r T101, warning=FALSE, message=FALSE}
+#这个是总体计算的答案，待验证
+# 计算均值和标准误
+summary_df <- df %>%
+  group_by(participant_condition, other_condition, question_content) %>%
+  summarise(mean_rating = mean(measure), 
+            se = sd(measure) / sqrt(n()), .groups = 'drop')
+
+
+# 设定颜色映射
+colors <- c("increase_smile" = "red", "decrease_smile" = "blue")
+
+# 绘制交互作用图
+ggplot(summary_df, aes(x = participant_condition, y = mean_rating, 
+                       group = other_condition, color = other_condition)) +
+  geom_point(position = position_dodge(width = 0.2), size = 3) +
+  geom_errorbar(aes(ymin = mean_rating - se, ymax = mean_rating + se), 
+                width = 0.2, position = position_dodge(width = 0.2)) +
+  geom_line(position = position_dodge(width = 0.2)) +
+  facet_wrap(~ question_content, scales = "free_y") +
+  scale_color_manual(values = colors) +
+  theme_minimal() +
+  labs(title = "Interaction Plot",
+       x = "Participant Condition",
+       y = "Participant Rating",
+       color = "Other Condition")
+
+```
+
+```{r T101, warning=FALSE, message=FALSE}
+#计算卡方效应
+# 加载必要的库
+library(lme4)
+library(lmerTest)
+
+
+
+# 确保变量类型正确
+df$participant_condition <- as.factor(df$participant_condition)
+df$other_condition <- as.factor(df$other_condition)
+df$question_content <- as.factor(df$question_content)
+
+# 拆分数据集：分别对不同的测量变量进行分析
+liked_df <- subset(df, question_content == "liked")
+other_liked_df <- subset(df, question_content == "other_liked")
+conversation_quality_df <- subset(df, question_content == "conversation_quality")
+video_conf_quality_df <- subset(df, question_content == "video_conf_quality")
+
+# GLMM 分析（对每个测量变量分别执行）
+liked_model <- glmer(measure ~ participant_condition * other_condition + (1 | dyad), 
+                     data = liked_df, family = gaussian)
+summary(liked_model)
+
+other_liked_model <- glmer(measure ~ participant_condition * other_condition + (1 | dyad), 
+                           data = other_liked_df, family = gaussian)
+summary(other_liked_model)
+
+conversation_quality_model <- glmer(measure ~ participant_condition * other_condition + (1 | dyad), 
+                                    data = conversation_quality_df, family = gaussian)
+summary(conversation_quality_model)
+
+video_conf_quality_model <- glmer(measure ~ participant_condition * other_condition + (1 | dyad), 
+                                  data = video_conf_quality_df, family = gaussian)
+summary(video_conf_quality_model)
+
+
+```
+```{r T101, warning=FALSE, message=FALSE}
+#计算卡方效应2,分别计算
+# 加载必要的库
+library(lme4)
+library(lmerTest)
+
+
+
+# 确保变量类型正确
+df$participant_condition <- as.factor(df$participant_condition)
+df$other_condition <- as.factor(df$other_condition)
+df$question_content <- as.factor(df$question_content)
+
+# 拆分数据集：分别对不同的测量变量进行分析
+liked_df <- subset(df, question_content == "liked")
+other_liked_df <- subset(df, question_content == "other_liked")
+conversation_quality_df <- subset(df, question_content == "conversation_quality")
+video_conf_quality_df <- subset(df, question_content == "video_conf_quality")
+
+# 加载必要的库
+library(lme4)
+library(lmerTest)  # 增加 p 值计算功能
+library(car)  # 用于 ANOVA 计算卡方检验
+
+# 假设数据集 df 结构如下：
+# df$participant_condition: 参与者微笑条件 (increase, decrease)
+# df$other_condition: 其他人微笑条件 (increase, decrease)
+# df$participant: 参与者 ID (随机效应)
+# df$rating: 评分 (因变量)
+
+# 转换为因子变量
+df$participant_condition <- as.factor(df$participant_condition)
+df$other_condition <- as.factor(df$other_condition)
+
+# **1️⃣ 运行 GLMM 模型**
+# 固定效应：participant_condition, other_condition 及其交互作用
+# 随机效应：参与者 ID
+glmm_model1 <- lmer(measure ~ participant_condition * other_condition + (1 | user_id), data = liked_df)
+
+# **2️⃣ 计算交互效应（Likelihood Ratio Test, LRT）**
+# 先运行一个不包含交互项的模型（仅主效应）
+glmm_model_main1 <- lmer( measure~ participant_condition + other_condition + (1 | user_id), data = liked_df)
+
+# 进行卡方检验（Likelihood Ratio Test, LRT）
+anova(glmm_model1, glmm_model_main1, test = "Chisq")
+
+
+# 随机效应：参与者 ID
+glmm_model2 <- lmer(measure ~ participant_condition * other_condition + (1 | user_id), data = other_liked_df)
+
+# **2️⃣ 计算交互效应（Likelihood Ratio Test, LRT）**
+# 先运行一个不包含交互项的模型（仅主效应）
+glmm_model_main2 <- lmer( measure~ participant_condition + other_condition + (1 | user_id), data = other_liked_df)
+
+# 进行卡方检验（Likelihood Ratio Test, LRT）
+anova(glmm_model2, glmm_model_main2, test = "Chisq")
+
+
+
+# 随机效应：参与者 ID
+glmm_model3 <- lmer(measure ~ participant_condition * other_condition + (1 | user_id), data = conversation_quality_df)
+
+# **2️⃣ 计算交互效应（Likelihood Ratio Test, LRT）**
+# 先运行一个不包含交互项的模型（仅主效应）
+glmm_model_main3 <- lmer( measure~ participant_condition + other_condition + (1 | user_id), data = conversation_quality_df)
+
+# 进行卡方检验（Likelihood Ratio Test, LRT）
+anova(glmm_model3, glmm_model_main3, test = "Chisq")
+
+
+
+# 随机效应：参与者 ID
+glmm_model4 <- lmer(measure ~ participant_condition * other_condition + (1 | user_id), data = video_conf_quality_df)
+
+# **2️⃣ 计算交互效应（Likelihood Ratio Test, LRT）**
+# 先运行一个不包含交互项的模型（仅主效应）
+glmm_model_main4 <- lmer( measure~ participant_condition + other_condition + (1 | user_id), data = video_conf_quality_df)
+
+# 进行卡方检验（Likelihood Ratio Test, LRT）
+anova(glmm_model4, glmm_model_main4, test = "Chisq")
+
+
+
+
+```
+
+```{r T101, warning=FALSE, message=FALSE}
+
+# 加载必要的库
+library(lme4)
+library(lmerTest)
+
+# 假设数据已经加载到一个名为df的数据框中
+# df <- read.csv("path_to_your_data.csv")
+
+# 构建GLMM模型
+# 以“liked”为例
+model_liked <- glmer(liked ~ participant_condition * other_condition + (1|dyad), 
+                     data = df, family = binomial)
+
+# 查看模型摘要
+summary(model_liked)
+
+# 对其他变量重复类似的过程
+model_other_liked <- glmer(other_liked ~ participant_condition * other_condition + (1|dyad), 
+                           data = df, family = binomial)
+summary(model_other_liked)
+
+model_conversation_quality <- glmer(conversation_quality ~ participant_condition * other_condition + (1|dyad), 
+                                    data = df, family = gaussian)
+summary(model_conversation_quality)
+
+model_video_quality <- glmer(video_conference_quality ~ participant_condition * other_condition + (1|dyad), 
+                             data = df, family = gaussian)
+summary(model_video_quality)
+
+```

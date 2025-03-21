@@ -1,3 +1,4 @@
+
 cat("\f")
 rm(list=ls())
 
@@ -82,3 +83,4 @@ df = data(likingLong)
 
 
 str(likingLong)
+```

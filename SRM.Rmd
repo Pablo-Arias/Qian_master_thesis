@@ -1,0 +1,148 @@
+---
+title: "SRM"
+author: "Qian"
+date: "2025-03-18"
+output: html_document
+---
+
+# Load the tidyverse package below
+```{r T101, warning=FALSE, message=FALSE}
+# Load the tidyverse package below
+cat("\f")
+rm(list=ls())
+
+# Init
+graphics.off()
+
+#install.packages("ez")
+#("phia")
+#install.packages("effsize")
+#install.packages("srm")
+#install.packages("TripleR")
+library("MASS")
+library(ez)
+library(afex)
+library(phia)
+library(doBy)
+library(effsize)
+library(lmerTest);
+library(dplyr);
+library(srm);
+library(ggplot2)
+library(TripleR)
+
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+
+#Import data
+file_name = "data/behavior/all_data_df.csv"
+
+#read data
+data = read.table(file_name, header=TRUE,sep=',')
+head(data)
+
+#defining outcomes
+measure			          <-as.numeric(data$measure)
+
+#defining predictors (categorical)
+participant_condition 	<- as.factor(data$participant_condition)
+participant_condition   <- relevel(participant_condition, "S")
+other_condition 		    <- as.factor(data$other_condition)
+other_condition         <- relevel(other_condition, "S")
+participant_nb			    <- as.factor(data$user_id)
+interacting_partner			<- as.factor(data$other_id)
+question_content		    <- as.factor(data$question_content)
+group_id		            <- as.factor(data$sid)
+
+#create new dataframe
+all_data=data.frame( measure, participant_condition , interacting_partner, other_condition, participant_nb, question_content, group_id )
+
+## -------------------------------------- ##
+## -------------------------------------- ##
+## GLMM Analysis ------------------------ ##
+## -------------------------------------- ##
+## -------------------------------------- ##
+
+# Choose the question you want to anlayse
+#question = "conversation_quality"
+#question = "liked"
+question = "other_liked"
+#question = "video_conf_quality"
+
+clean_data <- all_data[all_data$question_content == question,]
+head(clean_data)
+
+
+#Social relation Model
+RR.style("perception")
+
+#Round Robin
+RR1 <- RR(measure ~ participant_nb * interacting_partner | group_id, data = clean_data, na.rm = TRUE)
+RR1
+
+
+#Missing values
+plot_missings(measure ~ participant_nb * interacting_partner | group_id, data = clean_data, show.ids = FALSE)
+
+#Variance covariance
+plot(RR1)
+
+
+RR1$effects #measure perceiver and target
+RR1$effectsRel
+
+result_file = paste("data/behavior/srm/",question,".csv", sep="")
+write.csv(RR1$effectsRel, result_file) #Relationships
+
+df = data(likingLong)
+
+
+str(likingLong)
+```
+
+```
+
+```{r T101, warning=FALSE, message=FALSE}
+
+# Load required libraries
+library(lme4)
+library(ggplot2)
+
+# Function to run GLMM for each SRM dataset
+run_srm_glmm <- function(data, title) {
+  # Ensure factors are properly set
+  data$participant_condition <- as.factor(data$participant_condition)
+  data$other_condition <- as.factor(data$other_condition)
+
+  # Run the GLMM
+  glmm_model <- lmer(relationship ~ participant_condition * other_condition + 
+                      (1 | participant_nb) + (1 | interacting_partner), 
+                      data = data)
+  
+  # Print summary
+  print(summary(glmm_model))
+  
+  # Plot results
+  ggplot(data, aes(x = participant_condition, y = relationship, color = other_condition)) +
+    geom_point(alpha = 0.3, position = position_jitter(width = 0.2)) +
+    stat_summary(fun = mean, geom = "point", size = 4, position = position_dodge(0.2)) +
+    stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2, position = position_dodge(0.2)) +
+    labs(title = title, x = "Participant Condition", y = "Relationship Rating (SRM)") +
+    scale_color_manual(values = c("red", "blue")) +
+    theme_minimal()
+}
+
+# Load datasets
+liked <- read.csv("liked.csv")
+other_liked <- read.csv("other_liked.csv")
+conversation_quality <- read.csv("conversation_quality.csv")
+video_conf_quality <- read.csv("video_conf_quality.csv")
+
+# Run SRM GLMM for each dataset
+run_srm_glmm(liked, "Liked (SRM Relationship)")
+run_srm_glmm(other_liked, "Other Liked Me (SRM Relationship)")
+run_srm_glmm(conversation_quality, "Conversation Quality (SRM Relationship)")
+run_srm_glmm(video_conf_quality, "Video Conference Quality (SRM Relationship)")
+
+
+```
