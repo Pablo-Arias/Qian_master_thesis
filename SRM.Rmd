@@ -94,6 +94,8 @@ RR1$effectsRel
 result_file = paste("data/behavior/srm/",question,".csv", sep="")
 write.csv(RR1$effectsRel, result_file) #Relationships
 
+
+
 df = data(likingLong)
 
 
@@ -101,6 +103,13 @@ str(likingLong)
 ```
 
 ```
+
+```{r}
+library(lme4)
+```
+
+
+
 
 ```{r T101, warning=FALSE, message=FALSE}
 

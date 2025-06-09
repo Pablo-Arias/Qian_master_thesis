@@ -1,0 +1,900 @@
+---
+title: "SRM"
+author: "Qian"
+date: "2025-03-18"
+output: html_document
+---
+
+# Load the tidyverse package below
+```{r T101, warning=FALSE, message=FALSE}
+# Load the tidyverse package below
+cat("\f")
+rm(list=ls())
+
+# Init
+graphics.off()
+
+#install.packages("ez")
+#("phia")
+#install.packages("effsize")
+#install.packages("srm")
+#install.packages("TripleR")
+library("MASS")
+library(ez)
+library(afex)
+library(phia)
+library(doBy)
+library(effsize)
+library(lmerTest);
+library(dplyr);
+library(srm);
+library(ggplot2)
+library(TripleR)
+library(tidyverse)
+
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+
+#Import data
+file_name = "data/behavior/all_data_df.csv"
+
+#read data
+data = read.table(file_name, header=TRUE,sep=',')
+head(data)
+
+#defining outcomes
+measure			          <-as.numeric(data$measure)
+
+#defining predictors (categorical)
+participant_condition 	<- as.factor(data$participant_condition)
+participant_condition   <- relevel(participant_condition, "S")
+other_condition 		    <- as.factor(data$other_condition)
+other_condition         <- relevel(other_condition, "S")
+participant_nb			    <- as.factor(data$user_id)
+interacting_partner			<- as.factor(data$other_id)
+question_content		    <- as.factor(data$question_content)
+group_id		            <- as.factor(data$sid)
+
+#create new dataframe
+all_data=data.frame( measure, participant_condition , interacting_partner, other_condition, participant_nb, question_content, group_id )
+
+## -------------------------------------- ##
+## -------------------------------------- ##
+## GLMM Analysis ------------------------ ##
+## -------------------------------------- ##
+## -------------------------------------- ##
+
+# Choose the question you want to anlayse
+#question = "conversation_quality"
+#question = "liked"
+#question = "other_liked"
+question = "video_conf_quality"
+
+clean_data <- all_data[all_data$question_content == question,]
+head(clean_data)
+
+
+#Social relation Model
+RR.style("perception")
+
+#Round Robin
+RR1 <- RR(measure ~ participant_nb * interacting_partner | group_id, data = clean_data, na.rm = TRUE)
+RR1
+
+
+#Missing values
+plot_missings(measure ~ participant_nb * interacting_partner | group_id, data = clean_data, show.ids = FALSE)
+
+#Variance covariance
+plot(RR1)
+
+
+RR1$effects #measure perceiver and target
+RR1$effectsRel
+
+result_file = paste("data/behavior/srm/",question,".csv", sep="")
+write.csv(RR1$effectsRel, result_file) #Relationships
+
+# 保存 perceiver & target effects
+result_file_effects <- paste("data/behavior/srm/", question, "_effects.csv", sep = "")
+write.csv(RR1$effects, result_file_effects, row.names = FALSE)
+
+df = data(likingLong)
+
+
+str(likingLong)
+
+# Load required libraries
+library(lme4)
+library(ggplot2)
+
+# Function to run GLMM for each SRM dataset
+run_srm_glmm <- function(data, title) {
+  # Ensure factors are properly set
+  data$participant_condition <- as.factor(data$participant_condition)
+  data$other_condition <- as.factor(data$other_condition)
+
+  # Run the GLMM
+  glmm_model <- lmer(relationship ~ participant_condition * other_condition + 
+                      (1 | participant_nb) + (1 | interacting_partner), 
+                      data = data)
+  
+  # Print summary
+  print(summary(glmm_model))
+  
+  # Plot results
+  ggplot(data, aes(x = participant_condition, y = relationship, color = other_condition)) +
+    geom_point(alpha = 0.3, position = position_jitter(width = 0.2)) +
+    stat_summary(fun = mean, geom = "point", size = 4, position = position_dodge(0.2)) +
+    stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2, position = position_dodge(0.2)) +
+    labs(title = title, x = "Participant Condition", y = "Relationship Rating (SRM)") +
+    scale_color_manual(values = c("red", "blue")) +
+    theme_minimal()
+}
+
+
+# Load datasets
+liked <- read_csv("data/behavior/srm/liked.csv")
+other_liked <- read_csv("data/behavior/srm/other_liked.csv")
+conversation_quality <- read_csv("data/behavior/srm/conversation_quality.csv")
+video_conf_quality <- read_csv("data/behavior/srm/video_conf_quality.csv")
+
+
+# Run SRM GLMM for each dataset
+run_srm_glmm(liked, "Liked (SRM Relationship)")
+run_srm_glmm(other_liked, "Other Liked Me (SRM Relationship)")
+run_srm_glmm(conversation_quality, "Conversation Quality (SRM Relationship)")
+run_srm_glmm(video_conf_quality, "Video Conference Quality (SRM Relationship)")
+
+```
+```{r}
+#合并数据
+# 筛选主表中 question_content 为 liked 的子集
+
+               # ← liked 中含 relationship 值
+
+library(dplyr)
+library(readr)
+
+# 1. 读取数据
+all_data_df <- read.csv("data/behavior/all_data_df.csv")     # ← 替换为你的路径
+liked <- read_csv("data/behavior/srm/liked.csv")                  # ← liked 中含 relationship 值
+
+
+
+# 2. 重命名 liked 子表字段以匹配主表
+liked_clean <- liked %>%
+  rename(
+    sid = group.id,
+    user_id = participant_nb,
+    other_id = interacting_partner
+  ) %>%
+  mutate(
+    sid = as.character(sid),
+    user_id = as.character(user_id),
+    other_id = as.character(other_id)
+  )
+
+# 3. 确保主表字段类型一致
+all_data_df <- all_data_df %>%
+  mutate(
+    sid = as.character(sid),
+    user_id = as.character(user_id),
+    other_id = as.character(other_id)
+  )
+
+# 4. 仅对 liked 条目合并 relationship 分数
+all_data_liked <- all_data_df %>%
+  filter(question_content == "liked") %>%
+  left_join(
+    liked_clean[, c("sid", "user_id", "other_id", "relationship")],
+    by = c("sid", "user_id", "other_id")
+  )
+
+# 5. 非 liked 条目保持原样，relationship 设为 NA
+all_data_other <- all_data_df %>%
+  filter(question_content != "liked") %>%
+  mutate(relationship = NA)
+
+# 6. 合并为完整表
+all_data_srm <- bind_rows(all_data_other, all_data_liked)
+
+# 7. 保存结果为新文件
+write_csv(all_data_srm, "all_data_srm.csv")
+
+
+```
+```{r}
+#合并relationship
+#循环遍历读取所有问题的
+library(dplyr)
+library(readr)
+
+# 1. 读取主表
+all_data_df <- read_csv("data/behavior/all_data_df.csv") %>%
+  mutate(
+    sid = as.character(sid),
+    user_id = as.character(user_id),
+    other_id = as.character(other_id)
+  )
+
+# 2. 设定子表文件所在路径
+srm_path <- "data/behavior/srm"
+question_list <- c("liked", "other_liked", "conversation_quality", "video_conf_quality")
+
+# 3. 用于存储每一类合并后的数据
+merged_chunks <- list()
+
+# 4. 循环读取并合并
+for (question in question_list) {
+  
+  file_path <- file.path(srm_path, paste0(question, ".csv"))
+  
+  if (file.exists(file_path)) {
+    
+    srm_df <- read_csv(file_path) %>%
+      rename(
+        sid = group.id,
+        user_id = participant_nb,
+        other_id = interacting_partner
+      ) %>%
+      mutate(
+        sid = as.character(sid),
+        user_id = as.character(user_id),
+        other_id = as.character(other_id)
+      )
+    
+    # 筛选主表中对应 question 的子集并合并
+    data_q <- all_data_df %>%
+      filter(question_content == question) %>%
+      left_join(
+        srm_df[, c("sid", "user_id", "other_id", "relationship")],
+        by = c("sid", "user_id", "other_id")
+      )
+    
+    merged_chunks[[question]] <- data_q
+    
+  } else {
+    message(paste("⚠️ 文件未找到:", file_path, "- 已跳过该项"))
+    
+    # 无文件也保留数据并填入 NA
+    merged_chunks[[question]] <- all_data_df %>%
+      filter(question_content == question) %>%
+      mutate(relationship = NA)
+  }
+}
+
+# 5. 合并所有部分
+all_data_srm <- bind_rows(merged_chunks)
+
+# 6. 保存最终数据
+write_csv(all_data_srm, "all_data_srm.csv")
+
+message("✅ all_data_srm.csv 已成功保存！")
+
+```
+```{r}
+#定义function
+# Load required libraries
+library(lme4)
+library(ggplot2)
+
+# Function to run GLMM for each SRM dataset
+run_srm_glmm <- function(data, title) {
+  # Ensure factors are properly set
+  data$participant_condition <- as.factor(data$participant_condition)
+  data$other_condition <- as.factor(data$other_condition)
+
+  # Run the GLMM
+  glmm_model <- lmer(relationship ~ participant_condition * other_condition + 
+                      (1 | participant_nb) + (1 | interacting_partner), 
+                      data = data)
+  
+  # Print summary
+  print(summary(glmm_model))
+  
+  # Plot results
+  ggplot(data, aes(x = participant_condition, y = relationship, color = other_condition)) +
+    geom_point(alpha = 0.3, position = position_jitter(width = 0.2)) +
+    stat_summary(fun = mean, geom = "point", size = 4, position = position_dodge(0.2)) +
+    stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2, position = position_dodge(0.2)) +
+    labs(title = title, x = "Participant Condition", y = "Relationship Rating (SRM)") +
+    scale_color_manual(values = c("red", "blue")) +
+    theme_minimal()
+}
+
+
+# Load datasets
+liked <- read_csv("data/behavior/srm/liked.csv")
+other_liked <- read_csv("data/behavior/srm/other_liked.csv")
+conversation_quality <- read_csv("data/behavior/srm/conversation_quality.csv")
+video_conf_quality <- read_csv("data/behavior/srm/video_conf_quality.csv")
+
+
+# Run SRM GLMM for each dataset
+run_srm_glmm(liked, "Liked (SRM Relationship)")
+run_srm_glmm(other_liked, "Other Liked Me (SRM Relationship)")
+run_srm_glmm(conversation_quality, "Conversation Quality (SRM Relationship)")
+run_srm_glmm(video_conf_quality, "Video Conference Quality (SRM Relationship)")
+```
+
+
+
+```{r}
+#用老师的方法
+#重现图表 用srm模型
+
+library(lme4)
+library(ggplot2)
+
+# Function to run GLMM for each SRM dataset
+run_srm_glmm <- function(data, title) {
+  # Ensure factors are properly set
+  data$participant_condition <- as.factor(data$participant_condition)
+  data$other_condition <- as.factor(data$other_condition)
+
+  # Run the GLMM
+  glmm_model <- lmer(relationship ~ participant_condition * other_condition + 
+                      (1 | participant_nb) + (1 | interacting_partner), 
+                      data = data)
+  
+  # Print summary
+  print(summary(glmm_model))
+  
+  # Plot results
+  ggplot(data, aes(x = participant_condition, y = relationship, color = other_condition)) +
+    geom_point(alpha = 0.3, position = position_jitter(width = 0.2)) +
+    stat_summary(fun = mean, geom = "point", size = 4, position = position_dodge(0.2)) +
+    stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2, position = position_dodge(0.2)) +
+    labs(title = title, x = "Participant Condition", y = "Relationship Rating (SRM)") +
+    scale_color_manual(values = c("red", "blue")) +
+    theme_minimal()
+}
+
+
+
+liked <- read_csv("all_data_srm.csv") %>%
+
+
+# Run SRM GLMM for each dataset
+run_srm_glmm(liked, "Liked (SRM Relationship)")
+
+```
+
+```{r}
+#2用自己的方法  relationship
+#重现图表 用srm模型
+
+# 1. 加载包
+library(tidyverse)
+library(dplyr)
+library(TripleR)
+library(lme4)
+library(lmerTest)
+library(ggplot2)
+
+# 2. 假设数据已读入为 df
+df <- read_csv("all_data_srm.csv")
+
+
+
+
+
+# 修正编码（S = decrease smile, U = increase smile）
+df <- df %>%
+  mutate(
+    participant_condition = recode(participant_condition, "S" = "decrease", "U" = "increase"),
+    other_condition = recode(other_condition, "S" = "decrease", "U" = "increase")
+  )
+
+# 映射标签
+df$question_label <- recode(df$question_content,
+  "liked" = "A. Liked",
+  "other_liked" = "B. Other liked me",
+  "conversation_quality" = "C. Conversation quality",
+  "video_conf_quality" = "D. Video conference quality"
+)
+
+# 设置因子顺序（保证图表排序和配色一致）
+df$participant_condition <- factor(df$participant_condition, levels = c("increase", "decrease"))
+df$other_condition <- factor(df$other_condition, levels = c("increase", "decrease"))
+df$question_label <- factor(df$question_label,
+  levels = c("A. Liked", "B. Other liked me", "C. Conversation quality", "D. Video conference quality"))
+
+# 绘图
+g <- ggplot(df, aes(x = participant_condition, y = relationship, color = other_condition)) +
+  geom_jitter(width = 0.15, alpha = 0.2, size = 1.2) +  # 散点图层
+  stat_summary(fun = mean, geom = "point", size = 3,
+               position = position_dodge(width = 0.4)) +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2,
+               position = position_dodge(width = 0.4)) +
+  stat_summary(fun = mean, geom = "line",
+               position = position_dodge(width = 0.4), aes(group = other_condition), size = 0.8) +
+  scale_color_manual(values = c("increase" = "red", "decrease" = "blue"),
+                     name = "Other condition",
+                     labels = c("increase smile", "decrease smile")) +
+  facet_wrap(~question_label, nrow = 1) +
+  labs(
+    x = "Participant condition",
+    y = "Participant Rating\n(relationship value in the SRM)",
+    title = "Figure 6. Psychological analysis"
+  ) +
+  theme_minimal(base_size = 12)
+
+# 展示图
+print(g)
+
+# 可选：保存为高分辨图像
+ggsave("Figure6_final.png", g, width = 13, height = 5, dpi = 300)
+```
+
+
+
+```{r}
+#relationship SRM 
+cat("\f")
+rm(list=ls())
+
+# Init
+graphics.off()
+
+#install.packages("ez")
+#("phia")
+#install.packages("effsize")
+#install.packages("srm")
+#install.packages("TripleR")
+library("MASS")
+library(ez)
+library(afex)
+library(phia)
+library(doBy)
+library(effsize)
+library(lmerTest);
+library(dplyr);
+library(srm);
+library(ggplot2)
+library(TripleR)
+library(tidyverse)
+
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+
+#Import data
+file_name = "all_data_srm.csv"
+
+#read data
+data = read.table(file_name, header=TRUE,sep=',')
+head(data)
+
+#defining outcomes
+measure			          <-as.numeric(data$measure)
+
+#defining predictors (categorical)
+participant_condition 	<- as.factor(data$participant_condition)
+participant_condition   <- relevel(participant_condition, "S")
+other_condition 		    <- as.factor(data$other_condition)
+other_condition         <- relevel(other_condition, "S")
+participant_nb			    <- as.factor(data$user_id)
+interacting_partner			<- as.factor(data$other_id)
+question_content		    <- as.factor(data$question_content)
+group_id		            <- as.factor(data$sid)
+
+#create new dataframe
+all_data=data.frame( measure, participant_condition , interacting_partner, other_condition, participant_nb, question_content, group_id )
+
+## -------------------------------------- ##
+## -------------------------------------- ##
+## GLMM Analysis ------------------------ ##
+## -------------------------------------- ##
+## -------------------------------------- ##
+
+# Choose the question you want to anlayse
+#question = "conversation_quality"
+#question = "liked"
+#question = "other_liked"
+question = "video_conf_quality"
+
+clean_data <- all_data[all_data$question_content == question,]
+head(clean_data)
+
+
+#Social relation Model
+RR.style("perception")
+
+#Round Robin
+RR1 <- RR(measure ~ participant_nb * interacting_partner | group_id, data = clean_data, na.rm = TRUE)
+RR1
+
+
+#Missing values
+plot_missings(measure ~ participant_nb * interacting_partner | group_id, data = clean_data, show.ids = FALSE)
+
+#Variance covariance
+plot(RR1)
+
+
+RR1$effects #measure perceiver and target
+RR1$effectsRel
+
+result_file = paste("data/behavior/srm/",question,".csv", sep="")
+#write.csv(RR1$effectsRel, result_file) #Relationships
+
+# 保存 perceiver & target effects
+result_file_effects <- paste("data/behavior/srm/", question, "_effects.csv", sep = "")
+#write.csv(RR1$effects, result_file_effects, row.names = FALSE)
+
+df = data(likingLong)
+
+
+str(likingLong)
+```
+
+
+
+```{r}
+#数据处理 合并Perceiver和Target
+library(dplyr)
+library(readr)
+
+# 1. 读取主表和子表
+all_data_srm <- read_csv("all_data_srm.csv")
+liked_effects <- read_csv("data/behavior/srm/liked_effects.csv")
+
+
+# 2. 重命名 liked_effects 列以便匹配
+liked_clean <- liked_effects %>%
+  rename(
+    sid = group.id,
+    perceiver_effect = measure.p,
+    target_effect = measure.t
+  ) %>%
+  mutate(
+    sid = as.character(sid)
+  )
+
+# 3. 主表统一类型
+all_data_srm <- all_data_srm %>%
+  mutate(
+    sid = as.character(sid),
+    user_id = as.character(user_id),
+    other_id = as.character(other_id)
+  )
+
+# 4. 分离 liked 和其他部分
+liked_part <- all_data_srm %>%
+  filter(question_content == "liked")
+
+other_part <- all_data_srm %>%
+  filter(question_content != "liked")
+
+# 5. 合并 liked 部分的 perceiver_effect（按 user_id 匹配 perceiver）
+liked_part <- liked_part %>%
+  left_join(liked_clean[, c("sid", "perceiver_effect")],
+            by = c("sid"))
+
+# 6. 合并 liked 部分的 target_effect（按 other_id 匹配 target）
+liked_part <- liked_part %>%
+  left_join(liked_clean[, c("sid", "target_effect")],
+            by = c("sid"))
+
+# 7. 合并完整数据
+all_data_srm_all <- bind_rows(other_part, liked_part)
+
+# 8. 保存为新文件
+write_csv(all_data_srm_all, "all_data_srm_all.csv")
+message("✅ 已保存 all_data_srm_all.csv，包含 liked 的个体效应！")
+
+
+
+```
+
+```{r}
+#遍历处理数据
+library(dplyr)
+library(readr)
+
+
+
+# 1. 读取主表
+all_data_df <- read_csv("all_data_srm.csv") %>%
+  mutate(
+    sid = as.character(sid),
+    user_id=as.character(user_id)  )
+
+# 2. 设定子表文件所在路径
+srm_path <- "data/behavior/srm"
+question_list <- c("liked", "other_liked", "conversation_quality", "video_conf_quality")
+
+# 3. 用于存储每一类合并后的数据
+merged_chunks <- list()
+
+# 4. 循环读取并合并
+for (question in question_list) {
+  
+  file_path <- file.path(srm_path, paste0(question, "_effects.csv"))
+  
+  if (file.exists(file_path)) {
+    
+    srm_df <- read_csv(file_path) %>%
+      rename(
+        sid = group.id,
+        user_id = id
+      ) %>%
+      mutate(
+        sid = as.character(sid),
+        user_id = as.character(user_id)
+      )
+    
+    # 筛选主表中对应 question 的子集并合并
+    data_q <- all_data_df %>%
+      filter(question_content == question) %>%
+      left_join(
+        srm_df[, c("sid", "user_id", "measure.p", "measure.t")],
+        by = c("sid", "user_id")
+      )
+    
+    merged_chunks[[question]] <- data_q
+    
+  } else {
+    message(paste("⚠️ 文件未找到:", file_path, "- 已跳过该项"))
+    
+    # 无文件也保留数据并填入 NA
+    merged_chunks[[question]] <- all_data_df %>%
+      filter(question_content == question) %>%
+      mutate(relationship = NA)
+  }
+}
+
+# 5. 合并所有部分
+all_data_srm <- bind_rows(merged_chunks)
+
+# 6. 保存最终数据
+write_csv(all_data_srm, "all_data_srm_all.csv")
+message("🎉 所有可用效应已成功合并到 all_data_srm_all.csv")
+
+
+
+
+```
+
+```{r}
+#去重
+library(dplyr)
+library(readr)
+
+# 读取数据
+df <- read_csv("all_data_srm_all.csv")
+
+# 按 sid 和 user_id 分组，保留第一条记录（因 perceiver/target_effect 相同）
+df_unique <- df %>%
+  group_by(sid, user_id , question_content) %>%
+  slice(1) %>%
+  ungroup()
+
+# 保存去重结果（可选）
+write_csv(df_unique, "all_data_srm_unique.csv")
+
+message("✅ 已完成按 sid + user_id 去重并保留唯一行。")
+
+```
+```{r}
+ #perceiver SRM
+# 1. 加载包
+library(tidyverse)
+library(dplyr)
+library(TripleR)
+library(lme4)
+library(lmerTest)
+library(ggplot2)
+
+# 2. 假设数据已读入为 df
+df <- read_csv("all_data_srm_unique.csv")
+
+
+
+# 修正编码（S = decrease smile, U = increase smile）
+df <- df %>%
+  mutate(
+    participant_condition = recode(participant_condition, "S" = "decrease", "U" = "increase"),
+    other_condition = recode(other_condition, "S" = "decrease", "U" = "increase")
+  )
+
+# 映射标签
+df$question_label <- recode(df$question_content,
+  "liked" = "A. Liked",
+  "other_liked" = "B. Other liked me",
+  "conversation_quality" = "C. Conversation quality",
+  "video_conf_quality" = "D. Video conference quality"
+)
+
+# 设置因子顺序（保证图表排序和配色一致）
+df$participant_condition <- factor(df$participant_condition, levels = c("increase", "decrease"))
+df$other_condition <- factor(df$other_condition, levels = c("increase", "decrease"))
+df$question_label <- factor(df$question_label,
+  levels = c("A. Liked", "B. Other liked me", "C. Conversation quality", "D. Video conference quality"))
+
+# 绘图
+g <- ggplot(df, aes(x = participant_condition, y = measure.p, color = other_condition)) +
+  geom_jitter(width = 0.15, alpha = 0.2, size = 1.2) +  # 散点图层
+  stat_summary(fun = mean, geom = "point", size = 3,
+               position = position_dodge(width = 0.4)) +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2,
+               position = position_dodge(width = 0.4)) +
+  stat_summary(fun = mean, geom = "line",
+               position = position_dodge(width = 0.4), aes(group = other_condition), size = 0.8) +
+  scale_color_manual(values = c("increase" = "red", "decrease" = "blue"),
+                     name = "Other condition",
+                     labels = c("increase smile", "decrease smile")) +
+  facet_wrap(~question_label, nrow = 1) +
+  labs(
+    x = "Participant condition",
+    y = "Participant Rating\n(relationship value in the SRM)",
+    title = "Figure 6. Psychological analysis"
+  ) +
+  theme_minimal(base_size = 12)
+
+# 展示图
+print(g)
+```
+
+
+```{r}
+#perceiver SRM
+
+library(tidyverse)
+
+# 1. 读取数据
+df <- read_csv("all_data_srm_unique.csv")
+
+# 2. 映射题目标签（可选美化）
+df <- df %>%
+  mutate(
+    question_label = recode(question_content,
+      "liked" = "A. Liked",
+      "other_liked" = "B. Other liked me",
+      "conversation_quality" = "C. Conversation quality",
+      "video_conf_quality" = "D. Video conference quality"
+    )
+  )
+
+# 3. 设置因子顺序（保持绘图顺序一致）
+df$question_label <- factor(df$question_label,
+  levels = c("A. Liked", "B. Other liked me", "C. Conversation quality", "D. Video conference quality"))
+
+# 4. 绘图
+g <- ggplot(df, aes(x = question_label, y = measure.p)) +
+  geom_jitter(width = 0.2, alpha = 0.2, color = "gray40", size = 1) +
+  stat_summary(fun = mean, geom = "point", size = 3, color = "black") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.15, color = "black") +
+  labs(
+    x = "Question",
+    y = "Perceiver Effect (measure.p)",
+    title = "Perceiver Effect Across Questions (SRM)"
+  ) +
+  theme_minimal(base_size = 12)
+
+# 5. 展示图
+print(g)
+
+
+```
+
+```{r}
+#target SRM
+library(tidyverse)
+
+# 1. 读取数据
+df <- read_csv("all_data_srm_unique.csv")
+
+# 2. 映射题目标签（可选美化）
+df <- df %>%
+  mutate(
+    question_label = recode(question_content,
+      "liked" = "A. Liked",
+      "other_liked" = "B. Other liked me",
+      "conversation_quality" = "C. Conversation quality",
+      "video_conf_quality" = "D. Video conference quality"
+    )
+  )
+
+# 3. 设置因子顺序（保持绘图顺序一致）
+df$question_label <- factor(df$question_label,
+  levels = c("A. Liked", "B. Other liked me", "C. Conversation quality", "D. Video conference quality"))
+
+# 4. 绘图
+g <- ggplot(df, aes(x = question_label, y = measure.t)) +
+  geom_jitter(width = 0.2, alpha = 0.2, color = "gray40", size = 1) +
+  stat_summary(fun = mean, geom = "point", size = 3, color = "black") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.15, color = "black") +
+  labs(
+    x = "Question",
+    y = "Target Effect (measure.t)",
+    title = "Target Effect Across Questions (SRM)"
+  ) +
+  theme_minimal(base_size = 12)
+
+# 5. 展示图
+print(g)
+
+```
+
+```{r}
+#测试
+#target SRM
+library(tidyverse)
+
+# 1. 读取数据
+df <- read_csv("all_data_srm_all.csv")
+
+# 2. 映射题目标签（可选美化）
+df <- df %>%
+  mutate(
+    question_label = recode(question_content,
+      "liked" = "A. Liked",
+      "other_liked" = "B. Other liked me",
+      "conversation_quality" = "C. Conversation quality",
+      "video_conf_quality" = "D. Video conference quality"
+    )
+  )
+
+# 3. 设置因子顺序（保持绘图顺序一致）
+df$question_label <- factor(df$question_label,
+  levels = c("A. Liked", "B. Other liked me", "C. Conversation quality", "D. Video conference quality"))
+
+# 4. 绘图
+g <- ggplot(df, aes(x = question_label, y = relationship)) +
+  geom_jitter(width = 0.2, alpha = 0.2, color = "gray40", size = 1) +
+  stat_summary(fun = mean, geom = "point", size = 3, color = "black") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.15, color = "black") +
+  labs(
+    x = "Question",
+    y = "Target Effect (measure.t)",
+    title = "Target Effect Across Questions (SRM)"
+  ) +
+  theme_minimal(base_size = 12)
+
+# 5. 展示图
+print(g)
+```
+```{r}
+#测试
+library(tidyverse)
+
+# 假设你已经读取并清理好了数据为 df
+df <- read_csv("all_data_srm_unique.csv") %>%
+  mutate(
+    question_label = recode(question_content,
+      "liked" = "A. Liked",
+      "other_liked" = "B. Other liked me",
+      "conversation_quality" = "C. Conversation quality",
+      "video_conf_quality" = "D. Video conference quality"
+    )
+  )
+
+df$question_label <- factor(df$question_label,
+  levels = c("A. Liked", "B. Other liked me", "C. Conversation quality", "D. Video conference quality"))
+
+# 绘图：每个小图表示一个问题类型，展示 measure.p
+g <- ggplot(df, aes(x = participant_condition, y = measure.p, color = other_condition)) +
+  geom_jitter(width = 0.15, alpha = 0.2, size = 1.2) +
+  stat_summary(fun = mean, geom = "point", size = 3,
+               position = position_dodge(width = 0.4)) +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2,
+               position = position_dodge(width = 0.4)) +
+  stat_summary(fun = mean, geom = "line", aes(group = other_condition),
+               position = position_dodge(width = 0.4), size = 0.8) +
+  facet_wrap(~question_label, nrow = 1) +
+  scale_color_manual(values = c("increase" = "red", "decrease" = "blue")) +
+  labs(
+    title = "SRM Perceiver Effect by Question",
+    x = "Participant Condition",
+    y = "Perceiver Effect (measure.p)",
+    color = "Other Condition"
+  ) +
+  theme_minimal(base_size = 12)
+
+# 展示图
+print(g)
+
+```
+

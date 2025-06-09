@@ -20,7 +20,7 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 
 #Import data
-file_name = "../data/behavior/all_data_df.csv"
+file_name = "../behavior/all_data_df.csv"
 
 #read data
 data = read.table(file_name, header=TRUE,sep=',')
@@ -49,12 +49,15 @@ all_data=data.frame( measure, participant_condition , interacting_partner, other
 ## -------------------------------------- ##
 
 # Choose the question you want to anlayse
+undermine="U"
+strengthen="S"
 question = "conversation_quality"
 #question = "liked"
 #question = "other_liked"
 #question = "video_conf_quality"
 
-clean_data <- all_data[all_data$question_content == question,]
+#clean_data <- all_data[all_data$question_content == question,]
+clean_data <- all_data[all_data$other_condition==strengthen&question_content == question,]
 head(clean_data)
 
 
@@ -76,11 +79,10 @@ plot(RR1)
 RR1$effects #measure perceiver and target
 RR1$effectsRel
 
-result_file = paste("data/behavior/srm/",question,".csv", sep="")
+result_file = paste("../behavior/srm/",question,".csv", sep="")
 write.csv(RR1$effectsRel, result_file) #Relationships
 
 df = data(likingLong)
 
 
 str(likingLong)
-```
