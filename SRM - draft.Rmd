@@ -1071,6 +1071,19 @@ correlation(data = df,
             select2 = "measure.t",  
             method = "spearman",
             alternative = "two.sided")
+
+
+
+# 1. 按 question_content 分组
+
+grouped <- df %>%
+  group_by(question_content) %>%
+  group_split()
+
+# 2. 对每一组运行 correlation()
+cor_list <- map(grouped, ~ correlation(select(., measure.p, measure.t), method = "spearman"))
+
+print(cor_list)
 ```
 
 ```{r}
@@ -1088,7 +1101,7 @@ ggplot(df, aes(x = question_content, y = relationship)) +
   geom_boxplot(fill = "lightblue", alpha = 0.7) +
   geom_jitter(width = 0.2, alpha = 0.4, color = "black") +
   theme_minimal() +
-  labs(title = "measure.p by Question Content",
+  labs(title = "relationship by Question Content",
        x = "Question Content",
        y = "relationship")
 
