@@ -67,8 +67,8 @@ all_data=data.frame( measure, participant_condition , interacting_partner, other
 # Choose the question you want to anlayse
 #question = "conversation_quality"
 #question = "liked"
-#question = "other_liked"
-question = "video_conf_quality"
+question = "other_liked"
+#question = "video_conf_quality"
 
 clean_data <- all_data[all_data$question_content == question,]
 head(clean_data)
@@ -379,15 +379,15 @@ library(lmerTest)
 library(ggplot2)
 
 # 2. 假设数据已读入为 df
-df <- read_csv("all_data_srm.csv")
+df <- read_csv("all_data_srm_unique.csv")
 
 
 
-# 修正编码（S = decrease smile, U = increase smile）
+# 修正编码（S = increase smile, U = decrease smile）
 df <- df %>%
   mutate(
-    participant_condition = recode(participant_condition, "S" = "decrease", "U" = "increase"),
-    other_condition = recode(other_condition, "S" = "decrease", "U" = "increase")
+    participant_condition = recode(participant_condition, "S" = "increase", "U" = "decrease"),
+    other_condition = recode(other_condition, "S" = "increase", "U" = "decrease")
   )
 
 # 映射标签
@@ -405,7 +405,7 @@ df$question_label <- factor(df$question_label,
   levels = c("A. Liked", "B. Other liked me", "C. Conversation quality", "D. Video conference quality"))
 
 # 绘图
-g <- ggplot(df, aes(x = participant_condition, y = relationship, color = other_condition)) +
+g <- ggplot(df, aes(x = participant_condition, y = measure.p, color = other_condition)) +
   geom_jitter(width = 0.15, alpha = 0.2, size = 1.2) +  # 散点图层
   stat_summary(fun = mean, geom = "point", size = 3,
                position = position_dodge(width = 0.4)) +
@@ -434,7 +434,7 @@ ggsave("Figure6_final.png", g, width = 13, height = 5, dpi = 300)
 
 
 ```{r}
-#relationship SRM 
+#relationship SRM  计算得到relationship value、measure.p、measure.t并存表
 cat("\f")
 rm(list=ls())
 
@@ -494,7 +494,7 @@ all_data=data.frame( measure, participant_condition , interacting_partner, other
 # Choose the question you want to anlayse
 #question = "conversation_quality"
 #question = "liked"
-question = "other_liked"
+#question = "other_liked"
 #question = "video_conf_quality"
 
 clean_data <- all_data[all_data$question_content == question,]
@@ -535,64 +535,7 @@ str(likingLong)
 
 
 ```{r}
-#数据处理 合并Perceiver和Target
-library(dplyr)
-library(readr)
-
-# 1. 读取主表和子表
-all_data_srm <- read_csv("all_data_srm.csv")
-liked_effects <- read_csv("data/behavior/srm/liked_effects.csv")
-
-
-# 2. 重命名 liked_effects 列以便匹配
-liked_clean <- liked_effects %>%
-  rename(
-    sid = group.id,
-    perceiver_effect = measure.p,
-    target_effect = measure.t
-  ) %>%
-  mutate(
-    sid = as.character(sid)
-  )
-
-# 3. 主表统一类型
-all_data_srm <- all_data_srm %>%
-  mutate(
-    sid = as.character(sid),
-    user_id = as.character(user_id),
-    other_id = as.character(other_id)
-  )
-
-# 4. 分离 liked 和其他部分
-liked_part <- all_data_srm %>%
-  filter(question_content == "liked")
-
-other_part <- all_data_srm %>%
-  filter(question_content != "liked")
-
-# 5. 合并 liked 部分的 perceiver_effect（按 user_id 匹配 perceiver）
-liked_part <- liked_part %>%
-  left_join(liked_clean[, c("sid", "perceiver_effect")],
-            by = c("sid"))
-
-# 6. 合并 liked 部分的 target_effect（按 other_id 匹配 target）
-liked_part <- liked_part %>%
-  left_join(liked_clean[, c("sid", "target_effect")],
-            by = c("sid"))
-
-# 7. 合并完整数据
-all_data_srm_all <- bind_rows(other_part, liked_part)
-
-# 8. 保存为新文件
-write_csv(all_data_srm_all, "all_data_srm_all.csv")
-message("✅ 已保存 all_data_srm_all.csv，包含 liked 的个体效应！")
-
-
-
-```
-
-```{r}
-#遍历处理数据measure.p和measure.t  条件 sid = group.id, user_id = id
+#遍历处理合并数据measure.p和measure.t  条件 sid = group.id, user_id = id
 library(dplyr)
 library(readr)
 
@@ -680,226 +623,7 @@ write_csv(df_unique, "all_data_srm_unique.csv")
 message("✅ 已完成按 sid + user_id 去重并保留唯一行。")
 
 ```
-```{r}
-# 用到了 perceiver SRM 中的measure.P和measure.t
-# 1. 加载包
-library(tidyverse)
-library(dplyr)
-library(TripleR)
-library(lme4)
-library(lmerTest)
-library(ggplot2)
 
-# 2. 假设数据已读入为 df
-df <- read_csv("all_data_srm_unique.csv")
-
-
-
-# 修正编码（S = decrease smile, U = increase smile）
-df <- df %>%
-  mutate(
-    participant_condition = recode(participant_condition, "S" = "decrease", "U" = "increase"),
-    other_condition = recode(other_condition, "S" = "decrease", "U" = "increase")
-  )
-
-# 映射标签
-df$question_label <- recode(df$question_content,
-  "liked" = "A. Liked",
-  "other_liked" = "B. Other liked me",
-  "conversation_quality" = "C. Conversation quality",
-  "video_conf_quality" = "D. Video conference quality"
-)
-
-# 设置因子顺序（保证图表排序和配色一致）
-df$participant_condition <- factor(df$participant_condition, levels = c("increase", "decrease"))
-df$other_condition <- factor(df$other_condition, levels = c("increase", "decrease"))
-df$question_label <- factor(df$question_label,
-  levels = c("A. Liked", "B. Other liked me", "C. Conversation quality", "D. Video conference quality"))
-
-# 绘图
-g <- ggplot(df, aes(x = participant_condition, y = measure.p, color = other_condition)) +
-  geom_jitter(width = 0.15, alpha = 0.2, size = 1.2) +  # 散点图层
-  stat_summary(fun = mean, geom = "point", size = 3,
-               position = position_dodge(width = 0.4)) +
-  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2,
-               position = position_dodge(width = 0.4)) +
-  stat_summary(fun = mean, geom = "line",
-               position = position_dodge(width = 0.4), aes(group = other_condition), size = 0.8) +
-  scale_color_manual(values = c("increase" = "red", "decrease" = "blue"),
-                     name = "Other condition",
-                     labels = c("increase smile", "decrease smile")) +
-  facet_wrap(~question_label, nrow = 1) +
-  labs(
-    x = "Participant condition",
-    y = "Participant Rating\n(measure.t  in the SRM)",
-    title = "Figure 6. Psychological analysis"
-  ) +
-  theme_minimal(base_size = 12)
-
-# 展示图
-print(g)
-```
-
-
-```{r}
-#perceiver SRM
-
-library(tidyverse)
-
-# 1. 读取数据
-df <- read_csv("all_data_srm_unique.csv")
-
-# 2. 映射题目标签（可选美化）
-df <- df %>%
-  mutate(
-    question_label = recode(question_content,
-      "liked" = "A. Liked",
-      "other_liked" = "B. Other liked me",
-      "conversation_quality" = "C. Conversation quality",
-      "video_conf_quality" = "D. Video conference quality"
-    )
-  )
-
-# 3. 设置因子顺序（保持绘图顺序一致）
-df$question_label <- factor(df$question_label,
-  levels = c("A. Liked", "B. Other liked me", "C. Conversation quality", "D. Video conference quality"))
-
-# 4. 绘图
-g <- ggplot(df, aes(x = question_label, y = measure.p)) +
-  geom_jitter(width = 0.2, alpha = 0.2, color = "gray40", size = 1) +
-  stat_summary(fun = mean, geom = "point", size = 3, color = "black") +
-  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.15, color = "black") +
-  labs(
-    x = "Question",
-    y = "Perceiver Effect (measure.p)",
-    title = "Perceiver Effect Across Questions (SRM)"
-  ) +
-  theme_minimal(base_size = 12)
-
-# 5. 展示图
-print(g)
-
-
-```
-
-```{r}
-#target SRM
-library(tidyverse)
-
-# 1. 读取数据
-df <- read_csv("all_data_srm_unique.csv")
-
-# 2. 映射题目标签（可选美化）
-df <- df %>%
-  mutate(
-    question_label = recode(question_content,
-      "liked" = "A. Liked",
-      "other_liked" = "B. Other liked me",
-      "conversation_quality" = "C. Conversation quality",
-      "video_conf_quality" = "D. Video conference quality"
-    )
-  )
-
-# 3. 设置因子顺序（保持绘图顺序一致）
-df$question_label <- factor(df$question_label,
-  levels = c("A. Liked", "B. Other liked me", "C. Conversation quality", "D. Video conference quality"))
-
-# 4. 绘图
-g <- ggplot(df, aes(x = question_label, y = measure.t)) +
-  geom_jitter(width = 0.2, alpha = 0.2, color = "gray40", size = 1) +
-  stat_summary(fun = mean, geom = "point", size = 3, color = "black") +
-  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.15, color = "black") +
-  labs(
-    x = "Question",
-    y = "Target Effect (measure.t)",
-    title = "Target Effect Across Questions (SRM)"
-  ) +
-  theme_minimal(base_size = 12)
-
-# 5. 展示图
-print(g)
-
-```
-
-```{r}
-#测试
-#target SRM
-library(tidyverse)
-
-# 1. 读取数据
-df <- read_csv("all_data_srm_all.csv")
-
-# 2. 映射题目标签（可选美化）
-df <- df %>%
-  mutate(
-    question_label = recode(question_content,
-      "liked" = "A. Liked",
-      "other_liked" = "B. Other liked me",
-      "conversation_quality" = "C. Conversation quality",
-      "video_conf_quality" = "D. Video conference quality"
-    )
-  )
-
-# 3. 设置因子顺序（保持绘图顺序一致）
-df$question_label <- factor(df$question_label,
-  levels = c("A. Liked", "B. Other liked me", "C. Conversation quality", "D. Video conference quality"))
-
-# 4. 绘图
-g <- ggplot(df, aes(x = question_label, y = relationship)) +
-  geom_jitter(width = 0.2, alpha = 0.2, color = "gray40", size = 1) +
-  stat_summary(fun = mean, geom = "point", size = 3, color = "black") +
-  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.15, color = "black") +
-  labs(
-    x = "Question",
-    y = "Target Effect (measure.t)",
-    title = "Target Effect Across Questions (SRM)"
-  ) +
-  theme_minimal(base_size = 12)
-
-# 5. 展示图
-print(g)
-```
-```{r}
-#测试  这个和上面那个结果为什么不一样呢
-library(tidyverse)
-
-# 假设你已经读取并清理好了数据为 df
-df <- read_csv("all_data_srm_unique.csv") %>%
-  mutate(
-    question_label = recode(question_content,
-      "liked" = "A. Liked",
-      "other_liked" = "B. Other liked me",
-      "conversation_quality" = "C. Conversation quality",
-      "video_conf_quality" = "D. Video conference quality"
-    )
-  )
-
-df$question_label <- factor(df$question_label,
-  levels = c("A. Liked", "B. Other liked me", "C. Conversation quality", "D. Video conference quality"))
-
-# 绘图：每个小图表示一个问题类型，展示 measure.p
-g <- ggplot(df, aes(x = participant_condition, y = relationship, color = other_condition)) +
-  geom_jitter(width = 0.15, alpha = 0.2, size = 1.2) +
-  stat_summary(fun = mean, geom = "point", size = 3,
-               position = position_dodge(width = 0.4)) +
-  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2,
-               position = position_dodge(width = 0.4)) +
-  stat_summary(fun = mean, geom = "line", aes(group = other_condition),
-               position = position_dodge(width = 0.4), size = 0.8) +
-  facet_wrap(~question_label, nrow = 1) +
-  scale_color_manual(values = c("increase" = "red", "decrease" = "blue")) +
-  labs(
-    title = "SRM Perceiver Effect by Question",
-    x = "Participant Condition",
-    y = "Perceiver Effect (measure.p)",
-    color = "Other Condition"
-  ) +
-  theme_minimal(base_size = 12)
-
-# 展示图
-print(g)
-
-```
 
 ```{r}
 #画图
@@ -908,21 +632,16 @@ library(ggplot2)
 library(dplyr)
 
 # 读取数据（假设你已经用 read.csv() 读入为 df）
-df <- read.csv("all_data_srm_all.csv")
+df <- read.csv("all_data_srm_unique.csv")
 
 
-ggplot(df, aes(x = question_content, y = measure.p)) +
+ggplot(df, aes(x = question_content, y = measure.t)) +
   geom_boxplot(fill = "lightblue", alpha = 0.7) +
   geom_jitter(width = 0.2, alpha = 0.4, color = "black") +
   theme_minimal() +
   labs(title = "measure.p by Question Content",
        x = "Question Content",
-       y = "measure.p")
-
-
-
-
-
+       y = "pe")
 
 ```
 
@@ -940,7 +659,7 @@ df %>%
   drop_na(question_content) %>% 
   mutate(question_content = factor(question_content, 
                          levels = c("liked", "other_liked","conversation_quality","video_conf_quality"))) %>% 
-  ggplot(aes(y = measure.t, x = question_content, fill = question_content)) +
+  ggplot(aes(y = measure.p, x = question_content, fill = question_content)) +
   geom_boxplot() + 
   scale_y_continuous(name = "Interest score (1-7)", 
                      breaks = c(1:7)) + 
@@ -986,7 +705,7 @@ ggplot(mean_df, aes(x = question_content, y = mean_measure_p)) +
 
 
 ```{r}
-#correlation
+#correlation  重现原始数据实验 
 
 # 1. 加载包
 library(tidyverse)
@@ -999,9 +718,6 @@ library(correlation)
 
 # 2. 假设数据已读入为 df
 df <- read_csv("../Dissertation/all_data_df.csv")
-
-
-
 
 
 # 修正编码（S = decrease smile, U = increase smile）
@@ -1052,9 +768,11 @@ print(g)
 # correlation  between measure.p and measure.t
 
 #install.packages("correlation")  # 如果还没装
+
+#查看总的correlation
 library(correlation)
 
-df <- read_csv("all_data_srm_unique.csv")
+df <- read_csv("all_data_srm_all.csv")
 df %>% 
   ggplot(aes(x = measure.p, y = measure.t)) + 
   geom_point() + 
@@ -1071,9 +789,10 @@ correlation(data = df,
             alternative = "two.sided")
 
 
+#按照问题分组
+library(purrr)
 
 # 1. 按 question_content 分组
-
 grouped <- df %>%
   group_by(question_content) %>%
   group_split()
@@ -1081,7 +800,26 @@ grouped <- df %>%
 # 2. 对每一组运行 correlation()
 cor_list <- map(grouped, ~ correlation(select(., measure.p, measure.t), method = "spearman"))
 
-print(cor_list)
+# 3. 加上分组名并组合成一个表
+names(cor_list) <- sapply(grouped, function(x) unique(x$question_content))
+cor_combined <- bind_rows(cor_list, .id = "question_content")
+
+# 查看
+print(cor_combined)
+
+
+
+#读取原始数据 分析相关性
+
+originaldata <- read_csv("data/behavior/srm/liked_effects.csv")
+
+
+correlation(data = originaldata, 
+            select = "measure.p", 
+            select2 = "measure.t",  
+            method = "spearman",
+            alternative = "two.sided")
+
 ```
 
 ```{r}
@@ -1205,7 +943,7 @@ correlation(data = df,
 ```
 
 ```{r}
-#correlation  同一组AtoB 和Bto A
+#correlation  同一组AtoB 和Bto A  同一个问题的correlation
 #calculate correlation
 library(dplyr)
 library(tidyr)
@@ -1255,7 +993,7 @@ df_paired %>%
                      breaks = c(1:6))
 
 #存表
-write.csv(df_paired, "data/behavior/srm/correlation.csv", row.names = FALSE)
+#write.csv(df_paired, "data/behavior/srm/correlation.csv", row.names = FALSE)
 
 
 
@@ -1314,7 +1052,7 @@ print(cor_results)
 ```
 
 ```{r}
-#计算关系 同一组AtoB 和Bto A
+#计算关系 同一组AtoB 和Bto A  同一个dyad之间对同一个问题的评分之间的联系
 library(ggplot2)
 library(correlation)
 library(dplyr)
@@ -1449,6 +1187,8 @@ result <- pwr.r.test(r = rho,
 
 # 输出结果
 print(result)
+
+
 ```
 
 ```{r}
@@ -1575,63 +1315,8 @@ t.test(mean_diff2)
 ```
 
 
-```{r}
-#分析 相关性
-library(tidyverse)
-
-# 读取数据
-data <- read.csv("data/behavior/all_data_df.csv")
 
 
-# 提取 liked 和 other_liked 两个问题的数据
-liked_data <- data %>%
-  filter(question_content == "liked") %>%
-  select(dyad, user_id, liked = measure)
-
-other_liked_data <- data %>%
-  filter(question_content == "other_liked") %>%
-  select(dyad, user_id, other_liked = measure)
-
-# 在 dyad 内区分 person_1 和 person_2，可以按 user_id 排序或原始顺序
-liked_data <- liked_data %>%
-  group_by(dyad) %>%
-  arrange(user_id) %>%  # 按 user_id 升序排列 dyad 内的两个人
-  mutate(person = row_number())
-
-other_liked_data <- other_liked_data %>%
-  group_by(dyad) %>%
-  arrange(user_id) %>%
-  mutate(person = row_number())
-
-# person_1 的 liked 和 other_liked
-person1_liked <- liked_data %>% filter(person == 1) %>% select(dyad, liked_p1 = liked)
-person1_other_liked <- other_liked_data %>% filter(person == 1) %>% select(dyad, other_liked_p1 = other_liked)
-
-# person_2 的 liked 和 other_liked
-person2_liked <- liked_data %>% filter(person == 2) %>% select(dyad, liked_p2 = liked)
-person2_other_liked <- other_liked_data %>% filter(person == 2) %>% select(dyad, other_liked_p2 = other_liked)
-
-# 合并成 dyad 层级的数据
-dyad_data <- person1_liked %>%
-  left_join(person1_other_liked, by = "dyad") %>%
-  left_join(person2_liked, by = "dyad") %>%
-  left_join(person2_other_liked, by = "dyad")
-
-# 查看合并后的数据
-print(dyad_data)
-
-# 方向1：别人是否判断我喜欢他们
-# 即 person1 的 liked_p1 与 person2 猜测 person1 是否喜欢自己 (other_liked_p2)
-cor_1 <- cor.test(dyad_data$liked_p1, dyad_data$other_liked_p2)
-print(cor_1)
-
-# 方向2：我是否判断别人喜欢我
-# 即 person2 的 liked_p2 与 person1 猜测 person2 是否喜欢自己 (other_liked_p1)
-cor_2 <- cor.test(dyad_data$liked_p2, dyad_data$other_liked_p1)
-print(cor_2)
-
-
-```
 ```{r}
 # 能否预测最终版本  这两个相关性应该是一样的吧 因为仅仅是交换纵坐标和横坐标
 library(tidyverse)
@@ -1676,6 +1361,8 @@ cor.test(merged_data$partner_other_liked, merged_data$own_liked,
 cor.test(merged_data$partner_liked, merged_data$own_other_liked,
          method = "spearman", use = "complete.obs")
 
+write_csv(merged_data, "all_data_dyad_prediction.csv")
+
 
 merged_data %>% 
   ggplot(aes(x = own_liked, y = partner_other_liked)) + 
@@ -1691,6 +1378,12 @@ library(correlation)
 correlation(data = merged_data, 
             select = "own_liked", 
             select2 = "partner_other_liked",  
+            method = "spearman",
+            alternative = "two.sided")
+
+correlation(data = merged_data, 
+            select = "own_other_liked", 
+            select2 = "partner_liked",  
             method = "spearman",
             alternative = "two.sided")
 ```
@@ -1883,66 +1576,6 @@ print(cor_result)
 
 ```
 
-```{r}
-#2用自己的方法  target.p target.t
-#重现图表 用srm模型
-
-# 1. 加载包
-library(tidyverse)
-library(dplyr)
-library(TripleR)
-library(lme4)
-library(lmerTest)
-library(ggplot2)
-
-# 2. 假设数据已读入为 df
-df <- read_csv("all_data_srm_all.csv")
-
-
-# 修正编码（S = decrease smile, U = increase smile）
-df <- df %>%
-  mutate(
-    participant_condition = recode(participant_condition, "S" = "decrease", "U" = "increase"),
-    other_condition = recode(other_condition, "S" = "decrease", "U" = "increase")
-  )
-
-# 映射标签
-df$question_label <- recode(df$question_content,
-  "liked" = "A. Liked",
-  "other_liked" = "B. Other liked me",
-  "conversation_quality" = "C. Conversation quality",
-  "video_conf_quality" = "D. Video conference quality"
-)
-
-# 设置因子顺序（保证图表排序和配色一致）
-df$participant_condition <- factor(df$participant_condition, levels = c("increase", "decrease"))
-df$other_condition <- factor(df$other_condition, levels = c("increase", "decrease"))
-df$question_label <- factor(df$question_label,
-  levels = c("A. Liked", "B. Other liked me", "C. Conversation quality", "D. Video conference quality"))
-
-# 绘图
-g <- ggplot(df, aes(x = participant_condition, y = measure.t, color = other_condition)) +
-  geom_jitter(width = 0.15, alpha = 0.2, size = 1.2) +  # 散点图层
-  stat_summary(fun = mean, geom = "point", size = 3,
-               position = position_dodge(width = 0.4)) +
-  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2,
-               position = position_dodge(width = 0.4)) +
-  stat_summary(fun = mean, geom = "line",
-               position = position_dodge(width = 0.4), aes(group = other_condition), size = 0.8) +
-  scale_color_manual(values = c("increase" = "red", "decrease" = "blue"),
-                     name = "Other condition",
-                     labels = c("increase smile", "decrease smile")) +
-  facet_wrap(~question_label, nrow = 1) +
-  labs(
-    x = "Participant condition",
-    y = "Participant Rating\n(relationship value in the SRM)",
-    title = "Figure 6. Psychological analysis"
-  ) +
-  theme_minimal(base_size = 12)
-
-# 展示图
-print(g)
-```
 
 ```{r}
 #AVONA 数据处理以及解析
@@ -1989,359 +1622,330 @@ print(anova_result)
 ```
 
 ```{r}
-#检查数据
-
-# 加载库
-library(afex)
-library(dplyr)
+#分组 对mearurep和mearure.t 计算ANOVA 并保存新的表
 
 # 读取数据
-data <- read.csv("data/behavior/all_data_df_judge.csv")
+df <- read.csv("all_data_srm_unique.csv")  # 替换为你的文件路径
 
-# 只保留需要的列
-data <- data %>%
-  select(sid, alignment, question_content, measure)
 
-# 检查 alignment 的唯一值
-unique(data$alignment)
 
-# 确保 alignment 是 factor
-data <- data %>%
+library(dplyr)
+library(tidyr)
+
+# 假设 df 是你的原始数据
+df_long <- df %>%
+  pivot_longer(
+    cols = c(measure.p, measure.t),
+    names_to = "condition",
+    values_to = "value"
+  ) %>%
   mutate(
-    alignment = factor(alignment, levels = c(0, 1), labels = c("NotAligned", "Aligned")),
-    question_content = factor(question_content),
-    sid = as.factor(sid)
+    condition = recode(condition,
+                       "measure.p" = "perceiver_value",
+                       "measure.t" = "target_value")
   )
 
-# 检查是否重复
-duplicate_check <- data %>%
-  group_by(sid, alignment, question_content) %>%
-  summarise(count = n()) %>%
-  filter(count > 1)
+#存表
+write.csv(df_long, "all_data_srm_unique_group.csv", row.names = FALSE)
 
-print(duplicate_check)  # 如果有重复会打印出来
+```
 
-# 如果有重复，则取平均值
-data_summary <- data %>%
-  group_by(sid, alignment, question_content) %>%
-  summarise(measure = mean(measure, na.rm = TRUE)) %>%
-  ungroup()
 
-# 执行 mixed-design ANOVA
-anova_result <- aov_ez(
-  id = "sid",
-  dv = "measure",
-  data = data_summary,
-  within = "question_content",
-  between = "alignment"
-)
+```{r}
+# 方差 用书上的方式计算
 
-# 输出结果
-print(anova_result)
+#install.packages("rcompanion")
+#install.packages("effectsize")
+#install.packages("car")
+#install.packages("broom")
+#install.packages("emmeans")
+#install.packages("performance")
+#install.packages("afex")
+#install.packages("ez")
+library(rcompanion)
+library(effectsize)
+library(car)
+library(broom)
+library(broom)
+library(emmeans)
+library(tidyverse)
+library(performance)
+library(ez)
+library(afex)
+# specify as an object, so we only change it in one place
+dodge_value  <- read.csv("all_data_srm_unique_group.csv")  # 替换为你的文件路径
+
+dodge_value %>% 
+  mutate(value = case_match(condition,
+                           "measure.p" ~ "perceiver_value",
+                           "measure.t" ~ "target_value")) %>% 
+  ggplot(aes(y = value, x = question_content, fill = condition)) +
+  geom_violin(alpha = 0.5) + 
+  geom_boxplot(width = 0.2, 
+               alpha = 0.7,
+               fatten = NULL,
+               position = position_dodge(dodge_value)) + 
+  stat_summary(fun = "mean", 
+               geom = "point",
+               position = position_dodge(dodge_value)) +
+  stat_summary(fun.data = "mean_cl_boot", 
+               geom = "errorbar", 
+               width = .1,
+               position = position_dodge(dodge_value)) +
+  scale_fill_viridis_d(option = "E") + 
+  scale_y_continuous(name = "Interest score (1-7)", 
+                     breaks = c(1:7)) + 
+  theme_classic()
+
+
+#GPT给的代码  可视化
+library(dplyr)
+library(ggplot2)
+library(viridis)
+position = position_dodge(width = 0.8)
+
+dodge_value <- read.csv("all_data_srm_unique_group.csv")
+
+dodge_value %>%
+  ggplot(aes(y = value, x = question_content, fill = condition)) +
+  geom_violin(alpha = 0.5, position = position_dodge(width = 0.8)) +
+  geom_boxplot(width = 0.2,
+               alpha = 0.7,
+               position = position_dodge(width = 0.8)) +
+  stat_summary(fun = "mean",
+               geom = "point",
+               position = position_dodge(width = 0.8)) +
+  stat_summary(fun.data = "mean_cl_boot",
+               geom = "errorbar",
+               width = .1,
+               position = position_dodge(width = 0.8)) +
+  scale_fill_viridis_d(option = "E") +
+  scale_y_continuous(name = "Interest score (1-7)",
+                     breaks = c(1:7)) +
+  theme_classic()
+
+#计算ANOVA
+mod_factorial <- aov_ez(id = "user_id",
+                        data = dodge_value, 
+                        within = c("condition", "question_content"),
+                        dv = "value", 
+                        type = 3,
+                        include_aov = TRUE,
+                        anova_table = list(es = "pes"),
+                        na.rm = TRUE) 
+
+factorial_output <- mod_factorial$anova_table %>% 
+  tidy()
+
+mod_factorial
+
+```
+```{r}
+#计算是否微笑  数据治理
+
+# 读取数据
+df <- read.csv("data/behavior/all_data_df.csv")  # 替换为你的文件路径
+
+
+
+dodge_value <- df %>%
+  mutate(condition = paste0(participant_condition, other_condition))
+
+
+#存表
+write.csv(dodge_value, "all_data_condition.csv", row.names = FALSE)
 
 ```
 
 ```{r}
-#另一种方法
-# 混合设计ANOVA分析代码
-# 2×4 mixed design: alignment (between) × question_content (within)
+#计算是否微笑 相关性
 
-# 混合设计ANOVA分析代码 - 2×4 Mixed Design
-# IV1 (between): alignment (1=对齐, 0=不对齐)
-# IV2 (within): question_content (4个问题)
-# DV: measure (评分)
+dodge_value  <- read.csv("all_data_condition.csv")  # 替换为你的文件路径
 
-#install.packages(c("tidyverse", "afex", "emmeans", "car", "psych", "ggplot2", "reshape2"))
+library(dplyr)
+library(ggplot2)
+library(viridis)
+position = position_dodge(width = 0.8)
 
-# 加载必要的包
-library(tidyverse)
-library(afex)        # 用于ANOVA分析
-library(emmeans)     # 用于事后检验
-library(car)         # 用于方差齐性检验
-library(psych)       # 用于描述性统计
-library(ggplot2)     # 用于可视化
-library(reshape2)    # 用于数据重塑
 
-# 读取数据
-data <- read.csv("data/behavior/all_data_df_judge.csv", stringsAsFactors = FALSE)
 
-# 数据预处理
-print("=== 数据预处理 ===")
-# 移除可能的缺失值
-data <- data[complete.cases(data$sid, data$alignment, data$question_content, data$measure), ]
+dodge_value %>%
+  ggplot(aes(y = measure, x = question_content, fill = condition)) +
+  geom_violin(alpha = 0.5, position = position_dodge(width = 0.8)) +
+  geom_boxplot(width = 0.2,
+               alpha = 0.7,
+               position = position_dodge(width = 0.8)) +
+  stat_summary(fun = "mean",
+               geom = "point",
+               position = position_dodge(width = 0.8)) +
+  stat_summary(fun.data = "mean_cl_boot",
+               geom = "errorbar",
+               width = .1,
+               position = position_dodge(width = 0.8)) +
+  scale_fill_viridis_d(option = "E") +
+  scale_y_continuous(name = "Interest score (1-7)",
+                     breaks = c(1:7)) +
+  theme_classic()
 
-# 将关键变量转换为因子
-data$sid <- as.factor(data$sid)
-data$alignment <- as.factor(data$alignment)
-data$question_content <- as.factor(data$question_content)
+#计算ANOVA
+mod_factorial <- aov_ez(id = "user_id",
+                        data = dodge_value, 
+                        within = c( "question_content","condition"),
+                    
+                        dv = "measure", 
+                        type = 3,
+                        include_aov = TRUE,
+                        anova_table = list(es = "pes"),
+                        na.rm = TRUE) 
 
-# 重新编码alignment变量
-data$alignment_label <- factor(data$alignment, 
-                              levels = c(0, 1),
-                              labels = c("不对齐", "对齐"))
+factorial_output <- mod_factorial$anova_table %>% 
+  tidy()
 
-# 检查数据基本信息
-print("数据维度:", dim(data))
-print("被试数量:", length(unique(data$sid)))
-print("alignment水平:", table(data$alignment))
-print("question_content水平:", table(data$question_content))
+mod_factorial
+```
 
-# 检查数据平衡性
-balance_check <- data %>%
-  group_by(sid, alignment) %>%
-  summarise(n_questions = n_distinct(question_content), .groups = 'drop')
+```{r}
+# 看relationship和measure的相关性
 
-print("每个被试的问题数量分布:")
-print(table(balance_check$n_questions))
+df <- read_csv("all_data_srm_all.csv")
+df %>% 
+  ggplot(aes(x = relationship, y = measure)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  scale_x_continuous(name = "relationship", 
+                     breaks = c(1:9)) + 
+  scale_y_continuous(name = " measure", 
+                     breaks = c(1:6))
 
-# 描述性统计
-print("=== 描述性统计 ===")
-descriptive_stats <- data %>%
-  group_by(alignment_label, question_content) %>%
-  summarise(
-    n = n(),
-    mean = round(mean(measure, na.rm = TRUE), 3),
-    sd = round(sd(measure, na.rm = TRUE), 3),
-    se = round(sd(measure, na.rm = TRUE) / sqrt(n()), 3),
-    .groups = 'drop'
-  )
-print(descriptive_stats)
+library(correlation)
+correlation(data = df, 
+            select = "relationship", 
+            select2 = "measure",  
+            method = "spearman",
+            alternative = "two.sided")
 
-# 整体描述性统计
-overall_stats <- data %>%
-  group_by(alignment_label) %>%
-  summarise(
-    n = n(),
-    mean = round(mean(measure, na.rm = TRUE), 3),
-    sd = round(sd(measure, na.rm = TRUE), 3),
-    .groups = 'drop'
-  )
-print("\n按对齐条件的整体统计:")
-print(overall_stats)
 
-question_stats <- data %>%
+#按照问题分组
+library(purrr)
+
+# 1. 按 question_content 分组
+grouped <- df %>%
   group_by(question_content) %>%
-  summarise(
-    n = n(),
-    mean = round(mean(measure, na.rm = TRUE), 3),
-    sd = round(sd(measure, na.rm = TRUE), 3),
-    .groups = 'drop'
-  )
-print("\n按问题类型的整体统计:")
-print(question_stats)
+  group_split()
 
-# 数据可视化
-print("=== 生成可视化图表 ===")
+# 2. 对每一组运行 correlation()
+cor_list <- map(grouped, ~ correlation(select(., relationship, measure), method = "spearman"))
 
-# 箱线图
-p1 <- ggplot(data, aes(x = question_content, y = measure, fill = alignment_label)) +
-  geom_boxplot(position = position_dodge(width = 0.8)) +
-  labs(
-    title = "不同问题类型和对齐条件下的评分分布",
-    x = "问题内容",
-    y = "评分",
-    fill = "微笑对齐"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+# 3. 加上分组名并组合成一个表
+names(cor_list) <- sapply(grouped, function(x) unique(x$question_content))
+cor_combined <- bind_rows(cor_list, .id = "question_content")
 
-print(p1)
+# 查看
+print(cor_combined)
+```
+```{r}
+#合并新的表 all_data
 
-# 均值图
-means_data <- data %>%
-  group_by(alignment_label, question_content) %>%
-  summarise(
-    mean_measure = mean(measure, na.rm = TRUE),
-    se = sd(measure, na.rm = TRUE) / sqrt(n()),
-    .groups = 'drop'
-  )
+library(tidyverse)
 
-p2 <- ggplot(means_data, aes(x = question_content, y = mean_measure, 
-                            color = alignment_label, group = alignment_label)) +
-  geom_point(size = 3) +
-  geom_line(size = 1) +
-  geom_errorbar(aes(ymin = mean_measure - se, ymax = mean_measure + se),
-                width = 0.1) +
-  labs(
-    title = "不同条件下的平均评分（±标准误）",
-    x = "问题内容",
-    y = "平均评分",
-    color = "微笑对齐"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-print(p2)
-
-# 检查ANOVA假设
-print("=== 检查ANOVA假设 ===")
-
-# 1. 正态性检验（针对残差）
-# 先进行初步ANOVA以获得残差
-temp_model <- aov(measure ~ alignment * question_content + Error(sid/question_content), data = data)
-residuals_data <- residuals(temp_model$sid)
-
-if(length(residuals_data) > 5000) {
-  residuals_sample <- sample(residuals_data, 5000)
-} else {
-  residuals_sample <- residuals_data
-}
-
-shapiro_test <- shapiro.test(residuals_sample)
-print("Shapiro-Wilk正态性检验:")
-print(shapiro_test)
-
-# 2. 方差齐性检验（针对被试间因子）
-print("\nLevene方差齐性检验:")
-levene_test <- leveneTest(measure ~ alignment, data = data)
-print(levene_test)
-
-# 进行混合设计ANOVA
-print("=== 混合设计ANOVA分析 ===")
-
-# 使用afex包进行混合设计ANOVA
-anova_result <- aov_ez(
-  id = "sid",                    # 被试ID
-  dv = "measure",                # 因变量
-  data = data,
-  between = "alignment",         # 被试间因子
-  within = "question_content",   # 被试内因子
-  type = 3,                      # Type III 平方和
-  return = "afex_aov"
+# 定义文件路径列表
+file_paths <- c(
+  "data/behavior/mkreal_meeting_experiment_prolific1.csv",
+  "data/behavior/mkreal_meeting_experiment_prolific2.csv",
+  "data/behavior/mkreal_meeting_experiment_prolific3.csv",
+  "data/behavior/mkreal_meeting_experiment_prolific4.csv",
+  "data/behavior/mkreal_meeting_experiment_prolific5.csv",
+  "data/behavior/mkreal_meeting_experiment_prolific6.csv",
+  "data/behavior/pilot_mkprolific_participant_real_21.csv",
+  "data/behavior/pilot_mkprolific_participant_real_22.csv",
+  "data/behavior/pilot_mkprolific_participant_real_31.csv",
+  "data/behavior/pilot_mkprolific_participant_real_32.csv"
 )
 
-print(anova_result)
+# 创建空列表存储处理后的数据
+all_data_list <- list()
 
-# 显示详细的ANOVA表
-print("\n=== 详细ANOVA结果 ===")
-anova_table <- anova_result$anova_table
-print(anova_table)
-
-# 效应量解释
-print("\n=== 效应量解释 ===")
-eta_squared <- anova_table$ges
-effect_names <- rownames(anova_table)
-
-for(i in 1:length(eta_squared)) {
-  eta_val <- eta_squared[i]
-  interpretation <- if(eta_val < 0.01) "小效应" else if(eta_val < 0.06) "中等效应" else "大效应"
-  cat(paste0(effect_names[i], ": ηG² = ", round(eta_val, 4), " (", interpretation, ")\n"))
+# 遍历所有文件路径
+for (file_path in file_paths) {
+  # 读取CSV文件
+  df <- read_csv(file_path, show_col_types = FALSE)
+  
+  # 提取所需列名 - 使用单数形式匹配
+  sid_col <- names(df)[str_detect(names(df), "session\\.config\\.id")]
+  dyad_col <- names(df)[str_detect(names(df), "dyad$")]
+  user_id_col <- names(df)[str_detect(names(df), "user_id$")]
+  other_id_col <- names(df)[str_detect(names(df), "other_id$")]
+  part_cond_col <- names(df)[str_detect(names(df), "participant_condition$")]
+  other_cond_col <- names(df)[str_detect(names(df), "other_condition$")]
+  
+  # 检查是否找到必需的列
+  if (length(sid_col) == 0 || 
+      length(dyad_col) == 0 || 
+      length(user_id_col) == 0 || 
+      length(other_id_col) == 0 || 
+      length(part_cond_col) == 0 || 
+      length(other_cond_col) == 0) {
+    message(paste("Skipping file due to missing columns:", file_path))
+    next
+  }
+  
+  # 提取问题列
+  question_cols <- names(df)[str_detect(names(df), 
+                                       "(liked$|other_liked$|conversation_quality$|video_conf_quality$)")]
+  
+  # 创建基础数据框
+  base_df <- df %>%
+    select(
+      sid = all_of(sid_col),
+      dyad = all_of(dyad_col),
+      user_id_raw = all_of(user_id_col),
+      other_id_raw = all_of(other_id_col),
+      participant_condition = all_of(part_cond_col),
+      other_condition = all_of(other_cond_col)
+    ) %>%
+    mutate(
+      user_id = paste0(sid, "__", user_id_raw),
+      other_id = paste0(sid, "__", other_id_raw)
+    ) %>%
+    select(-user_id_raw, -other_id_raw)
+  
+  # 转换问题列为长格式
+  if (length(question_cols) > 0) {
+    question_df <- df %>%
+      select(all_of(question_cols)) %>%
+      pivot_longer(
+        cols = everything(),
+        names_to = "question_content",
+        values_to = "measure"
+      )
+    
+    # 合并基础数据与问题数据
+    expanded_df <- base_df[rep(seq_len(nrow(base_df)), each = length(question_cols)), ] %>%
+      bind_cols(question_df)
+    
+    all_data_list[[file_path]] <- expanded_df
+  } else {
+    message(paste("No question columns found in:", file_path))
+  }
 }
 
-# 事后检验
-print("\n=== 事后检验与简单效应分析 ===")
-
-# 检查主效应和交互效应的显著性
-p_values <- anova_table$`Pr(>F)`
-effect_names <- rownames(anova_table)
-
-# 对齐条件主效应
-if(p_values[1] < 0.05) {
-  print("对齐条件主效应显著，进行事后检验:")
-  alignment_emmeans <- emmeans(anova_result, ~ alignment)
-  print(alignment_emmeans)
-  alignment_contrasts <- pairs(alignment_emmeans)
-  print(alignment_contrasts)
+# 合并所有表并添加索引
+if (length(all_data_list) > 0) {
+  all_data <- bind_rows(all_data_list) %>%
+    mutate(Index = row_number()) %>%
+    select(Index, sid, dyad, user_id, other_id, 
+           participant_condition, other_condition, 
+           question_content, measure)
+  
+  # 查看结果
+  print(glimpse(all_data))
 } else {
-  print("对齐条件主效应不显著")
+  stop("No data was processed. Check for missing columns in input files.")
 }
+# 保存
+write_csv(all_data, "data/behavior/all_data.csv")
 
-# 问题内容主效应
-if(p_values[2] < 0.05) {
-  print("\n问题内容主效应显著，进行事后检验:")
-  question_emmeans <- emmeans(anova_result, ~ question_content)
-  print(question_emmeans)
-  question_contrasts <- pairs(question_emmeans, adjust = "bonferroni")
-  print(question_contrasts)
-} else {
-  print("\n问题内容主效应不显著")
-}
 
-# 交互效应
-if(length(p_values) >= 3 && p_values[3] < 0.05) {
-  print("\n交互效应显著，进行简单效应分析:")
-  
-  # 在每个问题类型下比较对齐条件
-  print("在每个问题类型下比较对齐条件:")
-  simple_effects1 <- emmeans(anova_result, ~ alignment | question_content)
-  simple_contrasts1 <- pairs(simple_effects1)
-  print(simple_contrasts1)
-  
-  # 在每个对齐条件下比较问题类型
-  print("\n在每个对齐条件下比较问题类型:")
-  simple_effects2 <- emmeans(anova_result, ~ question_content | alignment)
-  simple_contrasts2 <- pairs(simple_effects2, adjust = "bonferroni")
-  print(simple_contrasts2)
-  
-} else {
-  print("\n交互效应不显著")
-}
 
-# 交互效应图
-print("\n=== 交互效应可视化 ===")
-if(require(emmeans, quietly = TRUE)) {
-  interaction_plot <- emmip(anova_result, alignment ~ question_content, CIs = TRUE) +
-    labs(
-      title = "对齐条件与问题类型的交互效应",
-      x = "问题内容",
-      y = "评分的估计边际均值",
-      color = "对齐条件"
-    ) +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  
-  print(interaction_plot)
-}
-
-# 生成APA格式报告
-print("\n=== APA格式结果报告 ===")
-cat("本研究采用2×4混合设计方差分析，其中微笑对齐为被试间因子（对齐 vs 不对齐），",
-    "问题类型为被试内因子（4种问题类型）。\n\n")
-
-cat("结果显示：\n")
-for(i in 1:nrow(anova_table)) {
-  effect_name <- rownames(anova_table)[i]
-  f_value <- round(anova_table$F[i], 3)
-  df1 <- anova_table$`num Df`[i]
-  df2 <- round(anova_table$`den Df`[i], 1)
-  p_value <- anova_table$`Pr(>F)`[i]
-  eta_squared <- round(anova_table$ges[i], 3)
-  
-  significance <- if(p_value < 0.001) "p < .001" else 
-                 if(p_value < 0.01) "p < .01" else
-                 if(p_value < 0.05) "p < .05" else
-                 paste("p =", round(p_value, 3))
-  
-  effect_chinese <- case_when(
-    effect_name == "alignment" ~ "微笑对齐主效应",
-    effect_name == "question_content" ~ "问题类型主效应", 
-    grepl(":", effect_name) ~ "交互效应",
-    TRUE ~ effect_name
-  )
-  
-  cat(paste0(effect_chinese, ": F(", df1, ", ", df2, ") = ", f_value, 
-             ", ", significance, ", ηG² = ", eta_squared, "\n"))
-}
-
-# 保存结果
-print("\n=== 保存分析结果 ===")
-# 保存描述性统计
-write.csv(descriptive_stats, "descriptive_statistics.csv", row.names = FALSE)
-
-# 保存ANOVA结果
-anova_summary <- data.frame(
-  Effect = rownames(anova_table),
-  F_value = round(anova_table$F, 3),
-  df1 = anova_table$`num Df`,
-  df2 = round(anova_table$`den Df`, 1),
-  p_value = round(anova_table$`Pr(>F)`, 4),
-  eta_squared = round(anova_table$ges, 3)
-)
-write.csv(anova_summary, "anova_results.csv", row.names = FALSE)
-
-cat("分析完成！结果已保存到当前工作目录。\n")
-cat("描述性统计: descriptive_statistics.csv\n")
-cat("ANOVA结果: anova_results.csv\n")
-}
 ```
 
